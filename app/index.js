@@ -39,18 +39,66 @@ var server = http.createServer(function(req, res){
   req.on('end', function(){
     buffer += decoder.end();
 
-    // Log the request path
-    console.log('Request received on this path: '+trimmedPath+' with method: '+method+' and with these query string parameters: ', queryStringObject);
-    console.log('Request received with these headers: ', headers);
+    // Choose the handler this request should go to. If one is not found, use the notFounf handler
+    var chosenHandler = typeof(router[trimmedPath]) !== 'undefined' ? router[trimmedPath]: handlers.notFound;
 
-    console.log('Request received with this payload: ', buffer);
+    // Construct the data object to send to handler
+    var data = {
+      'trimmedPath': trimmedPath,
+      'queryStringObject': queryStringObject,
+      'method': method,
+      'headers': headers,
+      'payload': buffer
+    };
+
+    //Route the request to the handler specified in the router
+    chosenHandler(data, function(statusCode, payload){
+      // Use the status code called back by the handler, or default to 200
+      statusCode = typeof(statusCode) == 'number' ? statusCode : 200;
+
+      // Use the payload called back by the handler, or default to an empty object
+      payload = typeof(payload) == 'object' ? payload : {};
+
+      // Convert the payload to a string
+      var payloadString = JSON.stringify(payload);
+
+      res.writeHead(statusCode);
+      res.end(payloadString);
+
+      console.log('Returning this response: ', statusCode, payloadString);
+    });
+
+    // Log the request path
+    // console.log('Request received on this path: '+trimmedPath+' with method: '+method+' and with these query string parameters: ', queryStringObject);
+    // console.log('Request received with these headers: ', headers);
+    //
+    // console.log('Request received with this payload: ', buffer);
   });
 
   //Send the response
-  res.end('Hello World\n');
+  //res.end('Hello World\n');
 });
 
 // Start the server, and have it listen on port 3000
 server.listen(3000, function(){
   console.log('The server is listening on port 3000 now');
 });
+
+// Define the handler
+var handlers = {};
+
+// Sample handler
+handlers.sample = function(data, callback){
+  // Callback a http status code, and a payload object
+  callback(406, {'name':'sample handler'});
+};
+
+// Not found handler
+handlers.notFound = function(data, callback){
+  callback(404);
+};
+
+// Define a request handler
+var router = {
+  'sample' : handlers.sample
+};
