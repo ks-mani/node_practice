@@ -6,86 +6,109 @@
 
 // Dependencies
 var http = require('http');
+var https = require('https');
 var url = require('url');
 var StringDecoder = require('string_decoder').StringDecoder;
 var config = require('./config');
+var fs = require('fs');
 
-// The server should respond to all requests with a string
-var server = http.createServer(function(req, res){
+// Instantiating the http server
+var httpServer = http.createServer(function(req, res){
+  unifiedServer(req, res);
+});
 
-  //Get the url and parse it
-  var parsedUrl = url.parse(req.url, true);
+// Start the http server
+httpServer.listen(config.httpPort, function(){
+  console.log('The server is listening on port ' + config.httpPort +' now in the environment '+config.envName+' mode');
+});
 
-  //Get the path
-  var path = parsedUrl.pathname;
-  var trimmedPath = path.replace(/^\/+|\/+$/g, '');
+// Instantiating the https server
+var httpsServerOptions = {
+  'key' : fs.readFileSync('./https/key.pm'),
+  'cert' : fs.readFileSync('./https/cert.pem')
+};
 
-  //Get the query string as an object
-  var queryStringObject = parsedUrl.query;
+var httpsServer = https.createServer(httpsServerOptions, function(req, res){
+  unifiedServer(req, res);
+});
 
-  // Get the HTTP method
-  var method = req.method.toLowerCase();
+// Start the https server
+httpsServer.listen(config.httpsPort, function(){
+  console.log('The server is listening on port ' + config.httpsPort +' now in the environment '+config.envName+' mode');
+});
 
-  // Get the headers as an object
-  var headers = req.headers;
 
-  // Get the payload, if any
-  var decoder = new StringDecoder('utf-8');
-  var buffer = '';
+// All the server logic for both the hrro and https server
+var unifiedServer = function(req, res){
 
-  req.on('data', function(data){
-    buffer += decoder.write(data);
-  });
+    //Get the url and parse it
+    var parsedUrl = url.parse(req.url, true);
 
-  req.on('end', function(){
-    buffer += decoder.end();
+    //Get the path
+    var path = parsedUrl.pathname;
+    var trimmedPath = path.replace(/^\/+|\/+$/g, '');
 
-    // Choose the handler this request should go to. If one is not found, use the notFounf handler
-    var chosenHandler = typeof(router[trimmedPath]) !== 'undefined' ? router[trimmedPath]: handlers.notFound;
+    //Get the query string as an object
+    var queryStringObject = parsedUrl.query;
 
-    // Construct the data object to send to handler
-    var data = {
-      'trimmedPath': trimmedPath,
-      'queryStringObject': queryStringObject,
-      'method': method,
-      'headers': headers,
-      'payload': buffer
-    };
+    // Get the HTTP method
+    var method = req.method.toLowerCase();
 
-    //Route the request to the handler specified in the router
-    chosenHandler(data, function(statusCode, payload){
-      // Use the status code called back by the handler, or default to 200
-      statusCode = typeof(statusCode) == 'number' ? statusCode : 200;
+    // Get the headers as an object
+    var headers = req.headers;
 
-      // Use the payload called back by the handler, or default to an empty object
-      payload = typeof(payload) == 'object' ? payload : {};
+    // Get the payload, if any
+    var decoder = new StringDecoder('utf-8');
+    var buffer = '';
 
-      // Convert the payload to a string
-      var payloadString = JSON.stringify(payload);
-
-      //Return the response
-      res.setHeader('Content-Type', 'application/json')
-      res.writeHead(statusCode);
-      res.end(payloadString);
-
-      console.log('Returning this response: ', statusCode, payloadString);
+    req.on('data', function(data){
+      buffer += decoder.write(data);
     });
 
-    // Log the request path
-    // console.log('Request received on this path: '+trimmedPath+' with method: '+method+' and with these query string parameters: ', queryStringObject);
-    // console.log('Request received with these headers: ', headers);
-    //
-    // console.log('Request received with this payload: ', buffer);
-  });
+    req.on('end', function(){
+      buffer += decoder.end();
 
-  //Send the response
-  //res.end('Hello World\n');
-});
+      // Choose the handler this request should go to. If one is not found, use the notFounf handler
+      var chosenHandler = typeof(router[trimmedPath]) !== 'undefined' ? router[trimmedPath]: handlers.notFound;
 
-// Start the server
-server.listen(config.port, function(){
-  console.log('The server is listening on port ' + config.port +' now in the environment '+config.envName+' mode');
-});
+      // Construct the data object to send to handler
+      var data = {
+        'trimmedPath': trimmedPath,
+        'queryStringObject': queryStringObject,
+        'method': method,
+        'headers': headers,
+        'payload': buffer
+      };
+
+      //Route the request to the handler specified in the router
+      chosenHandler(data, function(statusCode, payload){
+        // Use the status code called back by the handler, or default to 200
+        statusCode = typeof(statusCode) == 'number' ? statusCode : 200;
+
+        // Use the payload called back by the handler, or default to an empty object
+        payload = typeof(payload) == 'object' ? payload : {};
+
+        // Convert the payload to a string
+        var payloadString = JSON.stringify(payload);
+
+        //Return the response
+        res.setHeader('Content-Type', 'application/json')
+        res.writeHead(statusCode);
+        res.end(payloadString);
+
+        console.log('Returning this response: ', statusCode, payloadString);
+      });
+
+      // Log the request path
+      // console.log('Request received on this path: '+trimmedPath+' with method: '+method+' and with these query string parameters: ', queryStringObject);
+      // console.log('Request received with these headers: ', headers);
+      //
+      // console.log('Request received with this payload: ', buffer);
+    });
+
+    //Send the response
+    //res.end('Hello World\n');
+};
 
 // Define the handler
 var handlers = {};
